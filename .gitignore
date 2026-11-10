@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+.next/
+out/
+# env
+.env
+.env*.local
+# prisma
+prisma/migrations/
+# uploads
+public/uploads/
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,138 @@
+// Fully-working database: SQLite file (zero setup for evaluation).
+// Upgrade to Postgres later by changing provider + url to env("DATABASE_URL").
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         String   @default("CITIZEN") // OFFICER | CITIZEN
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  reports      CrimeReport[]
+  evidences    Evidence[]
+  lostFound    LostFound[]
+  community    CommunityPost[]
+  claimsMade   Claim[]        @relation("Claimant")
+  conversationsA Conversation[] @relation("PartyA")
+  conversationsB Conversation[] @relation("PartyB")
+  messages     Message[]
+  sessions     Session[]
+}
+
+model Session {
+  token     String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+model CrimeReport {
+  id          String   @id @default(cuid())
+  type        String
+  area        String
+  latitude    Float
+  longitude   Float
+  datetime    DateTime
+  description String
+  status      String   @default("Open")
+  anonymous   Boolean  @default(false)
+  reporterId  String?
+  reporter    User?    @relation(fields: [reporterId], references: [id])
+  evidences   Evidence[]
+  createdAt   DateTime @default(now())
+
+  @@index([area, datetime])
+  @@index([type, datetime])
+}
+
+model Evidence {
+  id         String   @id @default(cuid())
+  crimeId    String?
+  crime      CrimeReport? @relation(fields: [crimeId], references: [id])
+  fileUrl    String
+  fileType   String   @default("note")
+  tags       String   @default("") // comma-separated
+  uploadedBy String?
+  uploader   User?    @relation(fields: [uploadedBy], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  area      String   @default("All Pune")
+  severity  String   @default("info")
+  createdAt DateTime @default(now())
+}
+
+model CommunityPost {
+  id        String   @id @default(cuid())
+  text      String
+  area      String   @default("Pune")
+  likes     Int      @default(0)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model LostFound {
+  id          String   @id @default(cuid())
+  kind        String   // lost | found
+  item        String
+  area        String
+  description String   @default("")
+  imageEmoji  String   @default("🎒")
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  status      String   @default("open") // open | claimed | resolved
+  claims      Claim[]
+  createdAt   DateTime @default(now())
+}
+
+// Citizen B claims Citizen A's lost/found post -> owner approves -> chat opens
+model Claim {
+  id          String   @id @default(cuid())
+  lostFoundId String
+  lostFound   LostFound @relation(fields: [lostFoundId], references: [id], onDelete: Cascade)
+  claimantId  String
+  claimant    User     @relation("Claimant", fields: [claimantId], references: [id], onDelete: Cascade)
+  message     String   @default("")
+  status      String   @default("pending") // pending | approved | rejected
+  conversation Conversation?
+  createdAt   DateTime @default(now())
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  claimId     String   @unique
+  claim       Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  partyAId    String
+  partyA      User     @relation("PartyA", fields: [partyAId], references: [id], onDelete: Cascade)
+  partyBId    String
+  partyB      User     @relation("PartyB", fields: [partyBId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  createdAt   DateTime @default(now())
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}

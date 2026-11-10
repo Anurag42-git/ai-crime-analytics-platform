@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-feature-settings: "cv11", "ss01";
+}
+
+.glass {
+  @apply bg-white/[0.06] backdrop-blur-xl border border-white/10;
+}
+
+.card {
+  @apply glass rounded-2xl p-5 shadow-xl shadow-black/20;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-600 px-5 py-2.5 font-semibold text-white transition active:scale-[0.98];
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 px-5 py-2.5 font-medium transition;
+}
+
+.input {
+  @apply w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30;
+}
+
+.label {
+  @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400;
+}
+
+.badge-high { @apply rounded-full bg-red-500/15 text-red-300 border border-red-500/30 px-2.5 py-0.5 text-xs font-semibold; }
+.badge-medium { @apply rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-0.5 text-xs font-semibold; }
+.badge-low { @apply rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-semibold; }
+
+.leaflet-container {
+  border-radius: 1rem;
+  z-index: 0;
+}
