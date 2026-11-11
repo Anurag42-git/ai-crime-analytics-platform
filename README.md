@@ -1,6 +1,16 @@
 # AI Crime Analytics Platform — Intelligent Crime Prediction & Analytics
 
-Smart Cities (Pune) • ML + AI + Data Analytics • Fully working with real database.
+Smart Cities (Pune) • ML + AI + Data Analytics • Powered by **real FIR data**.
+
+## Real data (not synthetic)
+
+Crime records come from the **Maharashtra Police CCTNS "Published FIR" portal**
+(citizen.mahapolice.gov.in): all **4,021 FIRs registered in Pune City between
+01 Sep and 29 Nov 2026**, across **45 police stations** — each with its real FIR
+number, registration timestamp and legal sections (BNS 2023, IT Act, MV Act,
+NDPS, Arms Act, ...). `scripts/build-real-data.ts` transforms the raw scrape
+(`scripts/fir-raw/`) into the app dataset: sections → English crime types,
+stations → area + station-anchored coordinates.
 
 ## Quick start
 
@@ -63,4 +73,5 @@ The repo is deployed from GitHub; every push auto-redeploys.
 ## Tech
 
 Next.js 14.2.35 + TS + Tailwind + Recharts + Leaflet + Framer Motion + Prisma 5 (Postgres/Neon).
-Seed: 650 synthetic Pune crimes (`npm run db:seed` re-creates everything).
+Seed: 4,021 real Pune City FIRs (Sep–Nov 2026) from the Maharashtra Police CCTNS portal
+(`npm run db:seed` re-creates everything).

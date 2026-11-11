@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+// 4,021 REAL FIRs — Pune City, 01 Sep – 29 Nov 2026, from the Maharashtra Police
+// CCTNS published-FIR portal (see scripts/build-real-data.ts for provenance).
 import raw from "@/lib/data/pune-crimes.json";
 
 async function main() {
@@ -31,7 +33,7 @@ async function main() {
     );
   }
 
-  // 650 crimes
+  // 4,021 real FIRs (Pune City, Sep–Nov 2026)
   await prisma.crimeReport.createMany({
     data: (raw as any[]).map((c) => ({
       id: undefined,
