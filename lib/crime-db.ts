@@ -1,6 +1,33 @@
 export function severityFor(type: string): "high" | "medium" | "low" {
-  if (type === "Robbery" || type === "Assault") return "high";
-  if (type === "Theft" || type === "Burglary") return "medium";
+  // Matches the real CCTNS crime categories produced by scripts/build-real-data.ts
+  if (
+    type === "Murder" ||
+    type === "Attempt to Murder" ||
+    type === "Robbery" ||
+    type === "Sexual Offence" ||
+    type === "Assault on Woman" ||
+    type === "Kidnapping" ||
+    type === "Arms Violation" ||
+    type === "Drug Offence" ||
+    type === "Domestic Violence" ||
+    type === "Extortion"
+  )
+    return "high";
+  if (
+    type === "Assault" ||
+    type === "Theft" ||
+    type === "Burglary" ||
+    type === "Snatching" ||
+    type === "Cheating/Fraud" ||
+    type === "Cybercrime" ||
+    type === "Threat/Intimidation" ||
+    type === "Rioting" ||
+    type === "Road Accident" ||
+    type === "Chain Snatching" ||
+    type === "Harassment" ||
+    type === "Fraud"
+  )
+    return "medium";
   return "low";
 }
 
