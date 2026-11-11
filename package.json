@@ -9,6 +9,8 @@
     "lint": "next lint",
     "seed": "tsx scripts/seed-crimes.ts",
     "seed:db": "tsx scripts/seed-db.ts",
+    "db:push": "prisma db push",
+    "db:seed": "tsx scripts/seed-db.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

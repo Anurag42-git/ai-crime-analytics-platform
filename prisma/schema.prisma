@@ -1,13 +1,13 @@
-// Fully-working database: SQLite file (zero setup for evaluation).
-// Upgrade to Postgres later by changing provider + url to env("DATABASE_URL").
+// Database: Postgres (Neon free tier) — required for the Vercel deployment.
+// Set DATABASE_URL in .env (local) and in Vercel → Settings → Environment Variables.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {

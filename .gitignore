@@ -7,6 +7,8 @@ out/
 .env*.local
 # prisma
 prisma/migrations/
+prisma/*.db
+prisma/*.db-journal
 # uploads
 public/uploads/
 # OS
