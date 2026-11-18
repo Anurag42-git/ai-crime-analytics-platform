@@ -57,6 +57,12 @@ export default function CitizenPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(""), 7000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   const loadAll = useCallback(() => {
     fetch("/api/predict/risk").then((r) => r.json()).then((d) => setAreas(d.areas ?? [])).catch(() => {});
     fetch("/api/alerts").then((r) => r.json()).then(setFeed).catch(() => {});
@@ -148,27 +154,53 @@ export default function CitizenPage() {
     }
   };
 
+  // Accept a pasted image URL. If it is actually a giant data: URL (e.g. copied
+  // from another app), compress it exactly like an upload so Post always works
+  // and the payload stays small.
+  const handleUrlChange = async (val: string) => {
+    if (val.startsWith("data:image/")) {
+      try {
+        const blob = await (await fetch(val)).blob();
+        const file = new File([blob], "pasted-image.jpg", { type: blob.type || "image/jpeg" });
+        const dataUrl = await compressImage(file);
+        setLfForm((p) => ({ ...p, image: dataUrl, imageUrl: "" }));
+        setNotice("Pasted image compressed and attached.");
+        return;
+      } catch {
+        setNotice("That pasted image could not be read. Try saving it and using Choose File.");
+        return;
+      }
+    }
+    setLfForm((p) => ({ ...p, imageUrl: val, image: "" }));
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   const submitLF = async () => {
     if (!lfForm.item.trim()) { setNotice("Item name is required."); return; }
     const url = lfForm.imageUrl.trim();
-    if (url && !/^https?:\/\//i.test(url)) {
+    if (url && !/^(https?:\/\/|data:image\/)/i.test(url)) {
       setNotice("Image URL must start with http:// or https://");
       return;
     }
-    const r = await fetch("/api/lost-found", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind: lfForm.kind,
-        item: lfForm.item,
-        area: lfForm.area,
-        description: lfForm.description,
-        imageEmoji: lfForm.image || url || "🎒",
-      }) });
-    const d = await r.json();
-    if (d.ok) {
-      loadAll();
-      setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "", image: "", imageUrl: "" });
-      if (fileRef.current) fileRef.current.value = "";
-    } else setNotice(d.error ?? "Failed to post");
+    try {
+      const r = await fetch("/api/lost-found", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: lfForm.kind,
+          item: lfForm.item,
+          area: lfForm.area,
+          description: lfForm.description,
+          imageEmoji: lfForm.image || url || "🎒",
+        }) });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok) {
+        loadAll();
+        setNotice("Posted! Others see it with the photo hidden until you approve a claim.");
+        setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "", image: "", imageUrl: "" });
+        if (fileRef.current) fileRef.current.value = "";
+      } else setNotice(d.error ?? `Post failed (HTTP ${r.status})`);
+    } catch {
+      setNotice("Post failed — network error. Check your connection and try again.");
+    }
   };
 
   const claimItem = async (id: string) => {
@@ -215,8 +247,11 @@ export default function CitizenPage() {
       <Topbar title="Citizen Portal" subtitle={`Safety • reports • lost & found — ${session.name}`} />
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
         {notice && (
-          <div className="card border-emerald-400/30 bg-emerald-400/10 text-sm text-emerald-200">
-            {notice} <button onClick={() => setNotice("")} className="ml-2 underline">dismiss</button>
+          <div className="fixed bottom-6 left-1/2 z-50 w-[min(92vw,28rem)] -translate-x-1/2 rounded-xl border border-emerald-400/40 bg-[#0B1B3F] px-4 py-3 text-sm text-emerald-100 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="flex-1">{notice}</span>
+              <button onClick={() => setNotice("")} className="shrink-0 text-xs text-slate-300 underline">dismiss</button>
+            </div>
           </div>
         )}
 
@@ -299,10 +334,7 @@ export default function CitizenPage() {
               <span className="text-xs text-slate-500">or paste a URL</span>
               <input className="input max-w-sm text-xs" placeholder="https://example.com/item.jpg"
                 value={lfForm.imageUrl}
-                onChange={(e) => {
-                  setLfForm({ ...lfForm, imageUrl: e.target.value, image: "" });
-                  if (fileRef.current) fileRef.current.value = "";
-                }} />
+                onChange={(e) => handleUrlChange(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
               {lfForm.image || lfForm.imageUrl ? (
