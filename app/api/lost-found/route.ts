@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { getSessionUser, requireUser } from "@/lib/auth";
 
 export async function GET() {
-  const data = await prisma.lostFound.findMany({
+  const rows = await prisma.lostFound.findMany({
     orderBy: { createdAt: "desc" },
     include: {
       owner: { select: { id: true, name: true } },
       claims: { select: { id: true, status: true, claimantId: true } },
     },
   });
+
+  // Privacy: the photo and the description are the "secret" that proves ownership.
+  // Only the owner and an approved claimant receive them — redacted server-side so
+  // they are absent from the network response, not merely blurred in the CSS.
+  const user = await getSessionUser();
+  const data = rows.map((r) => {
+    const isOwner = !!user && r.ownerId === user.id;
+    const approvedForMe = !!user && r.claims.some((c) => c.status === "approved" && c.claimantId === user.id);
+    if (isOwner || approvedForMe) return r;
+    return { ...r, imageEmoji: "", description: "" };
+  });
+
   return NextResponse.json({ data });
 }
 
@@ -19,13 +31,16 @@ export async function POST(req: NextRequest) {
   const b = await req.json();
   if (!b.item || !String(b.item).trim())
     return NextResponse.json({ error: "item required" }, { status: 400 });
+  // imageEmoji holds either a short emoji or a compressed photo data-URL.
+  const img = String(b.imageEmoji ?? "🎒");
+  const imageEmoji = img.startsWith("data:image/") ? img.slice(0, 400_000) : img.slice(0, 16);
   const row = await prisma.lostFound.create({
     data: {
       kind: b.kind === "found" ? "found" : "lost",
       item: String(b.item).slice(0, 120),
       area: String(b.area ?? "Pune"),
       description: String(b.description ?? "").slice(0, 500),
-      imageEmoji: String(b.imageEmoji ?? "🎒"),
+      imageEmoji,
       ownerId: auth.user.id,
     },
     include: { owner: { select: { id: true, name: true } } },

@@ -5,6 +5,33 @@ import Topbar from "@/components/Topbar";
 import { useAuth } from "@/lib/auth-context";
 import { ShieldCheck, Megaphone, PackageSearch, MessagesSquare, FileWarning } from "lucide-react";
 
+// Resize + compress the picked photo in the browser, then store it as a data URL.
+// Keeps DB/Neon payloads small (~60–150 KB) without needing S3 for the prototype.
+function compressImage(file: File, maxSide = 900, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("canvas unavailable"));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function CitizenPage() {
   const { session, loading } = useAuth();
   const router = useRouter();
@@ -19,7 +46,7 @@ export default function CitizenPage() {
   const [post, setPost] = useState({ text: "", area: "Baner" });
   const [report, setReport] = useState({ type: "Theft", area: "Baner", description: "", anonymous: false });
   const [lf, setLf] = useState<any[]>([]);
-  const [lfForm, setLfForm] = useState({ kind: "lost", item: "", area: "Baner", description: "" });
+  const [lfForm, setLfForm] = useState({ kind: "lost", item: "", area: "Baner", description: "", image: "" });
   const [myClaims, setMyClaims] = useState<any[]>([]);
   const [incoming, setIncoming] = useState<any[]>([]);
   const [convs, setConvs] = useState<any[]>([]);
@@ -28,6 +55,7 @@ export default function CitizenPage() {
   const [chatInput, setChatInput] = useState("");
   const [notice, setNotice] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const loadAll = useCallback(() => {
     fetch("/api/predict/risk").then((r) => r.json()).then((d) => setAreas(d.areas ?? [])).catch(() => {});
@@ -72,6 +100,7 @@ export default function CitizenPage() {
   useEffect(() => {
     if (!session) return;
     const t = setInterval(() => {
+      fetch("/api/lost-found").then((r) => r.json()).then((d) => setLf(d.data ?? [])).catch(() => {});
       fetch("/api/claims?view=mine").then((r) => r.json()).then((d) => setMyClaims(d.data ?? [])).catch(() => {});
       fetch("/api/claims?view=incoming").then((r) => r.json()).then((d) => setIncoming(d.data ?? [])).catch(() => {});
       fetch("/api/chat/conversations").then((r) => r.json()).then((d) => setConvs(d.data ?? [])).catch(() => {});
@@ -97,11 +126,44 @@ export default function CitizenPage() {
     } else setNotice(d.error ?? "Failed to file report");
   };
 
+  const pickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      setNotice("Please choose an image file (JPG/PNG).");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    try {
+      const dataUrl = await compressImage(f);
+      if (dataUrl.length > 380_000) {
+        setNotice("Image still too large — try a smaller photo.");
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+      setLfForm((p) => ({ ...p, image: dataUrl }));
+      setNotice("Photo attached — it stays hidden until you approve a claim.");
+    } catch {
+      setNotice("Could not read that image.");
+    }
+  };
+
   const submitLF = async () => {
-    const r = await fetch("/api/lost-found", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lfForm) });
+    if (!lfForm.item.trim()) { setNotice("Item name is required."); return; }
+    const r = await fetch("/api/lost-found", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: lfForm.kind,
+        item: lfForm.item,
+        area: lfForm.area,
+        description: lfForm.description,
+        imageEmoji: lfForm.image || "🎒",
+      }) });
     const d = await r.json();
-    if (d.ok) { loadAll(); setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "" }); }
-    else setNotice(d.error ?? "Failed to post");
+    if (d.ok) {
+      loadAll();
+      setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "", image: "" });
+      if (fileRef.current) fileRef.current.value = "";
+    } else setNotice(d.error ?? "Failed to post");
   };
 
   const claimItem = async (id: string) => {
@@ -217,7 +279,7 @@ export default function CitizenPage() {
 
         {/* Lost & Found with real claims */}
         <div className="card">
-          <p className="flex items-center gap-2 font-extrabold"><PackageSearch className="h-5 w-5 text-emerald-300" /> Lost & Found — claim to unblur, owner approves, then chat</p>
+          <p className="flex items-center gap-2 font-extrabold"><PackageSearch className="h-5 w-5 text-emerald-300" /> Lost & Found — photo + details revealed only after the owner approves</p>
           <div className="mt-3 grid gap-2 md:grid-cols-5">
             <select className="input" value={lfForm.kind} onChange={(e) => setLfForm({ ...lfForm, kind: e.target.value })}><option value="lost">Lost</option><option value="found">Found</option></select>
             <input className="input" placeholder="Item" value={lfForm.item} onChange={(e) => setLfForm({ ...lfForm, item: e.target.value })} />
@@ -225,20 +287,43 @@ export default function CitizenPage() {
             <input className="input" placeholder="Description" value={lfForm.description} onChange={(e) => setLfForm({ ...lfForm, description: e.target.value })} />
             <button onClick={submitLF} className="btn-primary text-sm">Post</button>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <label className="label mb-0">Photo (optional)</label>
+            <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="input max-w-xs text-xs" />
+            {lfForm.image ? (
+              <div className="flex items-center gap-2">
+                <img src={lfForm.image} alt="preview" className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/20" />
+                <button onClick={() => { setLfForm({ ...lfForm, image: "" }); if (fileRef.current) fileRef.current.value = ""; }}
+                  className="text-xs text-red-300 underline">remove</button>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-500">No photo? An emoji placeholder is used.</span>
+            )}
+          </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {lf.map((x) => {
               const isMine = x.ownerId === session.id;
               const myClaim = claimFor(x.id);
               const convId = mineConvFor(x.id);
-              const approved = convId || x.claims?.some((c: any) => c.status === "approved" && (isMine || c.claimantId === session.id));
+              const approved = Boolean(convId) || x.claims?.some((c: any) => c.status === "approved" && (isMine || c.claimantId === session.id));
+              // Owner always sees their own item; claimant sees it only after approval.
+              const canSee = isMine || approved;
+              const isPhoto = typeof x.imageEmoji === "string" && x.imageEmoji.startsWith("data:image/");
               return (
                 <div key={x.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="relative grid h-28 place-items-center overflow-hidden rounded-lg bg-black/40 text-4xl">
-                    <span className={approved ? "" : "blur-md select-none"}>{x.imageEmoji || "🎒"}</span>
-                    {!approved && <span className="absolute rounded bg-black/70 px-2 py-1 text-[11px]">blurred until owner approves</span>}
+                  <div className="relative grid h-36 place-items-center overflow-hidden rounded-lg bg-black/40 text-4xl">
+                    {isPhoto ? (
+                      <img src={x.imageEmoji} alt={canSee ? x.item : "hidden item"}
+                        className={`h-full w-full object-cover ${canSee ? "" : "blur-xl scale-110"}`} />
+                    ) : (
+                      <span className={canSee ? "" : "blur-md select-none"}>{canSee ? (x.imageEmoji || "🎒") : "🔒"}</span>
+                    )}
+                    {!canSee && <span className="absolute rounded bg-black/70 px-2 py-1 text-[11px]">photo hidden until owner approves</span>}
                   </div>
                   <p className="mt-2 text-sm font-bold">{x.kind.toUpperCase()}: {x.item}</p>
-                  <p className="text-xs text-slate-400">{x.area} • by {x.owner?.name ?? "citizen"} • {x.description}</p>
+                  <p className="text-xs text-slate-400">
+                    {x.area} • by {x.owner?.name ?? "citizen"} • {canSee ? (x.description || "no description") : "details hidden until approved"}
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {isMine ? (
                       <span className="rounded bg-white/10 px-2 py-1 text-[11px] text-slate-300">Your post • {x.claims?.filter((c: any) => c.status === "pending").length ?? 0} pending claims</span>
