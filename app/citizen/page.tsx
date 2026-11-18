@@ -54,7 +54,8 @@ export default function CitizenPage() {
   const [msgs, setMsgs] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [notice, setNotice] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const msgCountRef = useRef(-1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -80,17 +81,25 @@ export default function CitizenPage() {
     fetch(`/api/predict/risk?area=${encodeURIComponent(selArea)}`).then((r) => r.json()).then((d) => setScore(d.areas?.[0])).catch(() => {});
   }, [selArea]);
 
-  // Poll active conversation every 2s — both citizens see messages live
+  // Poll active conversation every 2s — both citizens see messages live.
+  // Only the message list scrolls (never the page), and only when a message is added.
   useEffect(() => {
     if (!activeConv) return;
     let stop = false;
+    msgCountRef.current = -1;
     const poll = () =>
       fetch(`/api/chat/messages?conversationId=${activeConv}`)
         .then((r) => r.json())
         .then((d) => {
-          if (!stop) {
-            setMsgs(d.data ?? []);
-            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+          if (stop) return;
+          const list = d.data ?? [];
+          if (list.length !== msgCountRef.current) {
+            msgCountRef.current = list.length;
+            setMsgs(list);
+            setTimeout(() => {
+              const el = listRef.current;
+              if (el) el.scrollTop = el.scrollHeight;
+            }, 50);
           }
         })
         .catch(() => {});
@@ -424,13 +433,12 @@ export default function CitizenPage() {
                   <p className="text-sm text-slate-400">Select a conversation.</p>
                 ) : (
                   <>
-                    <div className="max-h-64 space-y-1.5 overflow-auto">
+                    <div ref={listRef} className="max-h-64 space-y-1.5 overflow-auto">
                       {msgs.map((m) => (
                         <p key={m.id} className={`w-fit max-w-[80%] rounded-lg px-3 py-1.5 text-sm ${m.senderId === session.id ? "ml-auto bg-brand-500" : "bg-white/10"}`}>
                           <span className="block text-[10px] opacity-70">{m.sender.name}</span>{m.text}
                         </p>
                       ))}
-                      <div ref={bottomRef} />
                     </div>
                     <div className="mt-2 flex gap-2">
                       <input className="input" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
