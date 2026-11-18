@@ -82,7 +82,7 @@ export default function OfficerPage() {
     await fetch("/api/evidence", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ crimeId: evForm.crimeId, tags: evForm.tags.split(",").map((t) => t.trim()), fileUrl: evForm.fileUrl || "demo-upload" }) });
     setEvForm({ crimeId: "", tags: "", fileUrl: "" });
-    alert("Evidence logged (demo). Connect S3 + Postgres for file storage.");
+    alert("Evidence metadata saved to the database. Binary file storage (S3/Cloudinary) is the next production step.");
   };
 
   return (
