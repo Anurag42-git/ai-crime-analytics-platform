@@ -31,9 +31,14 @@ export async function POST(req: NextRequest) {
   const b = await req.json();
   if (!b.item || !String(b.item).trim())
     return NextResponse.json({ error: "item required" }, { status: 400 });
-  // imageEmoji holds either a short emoji or a compressed photo data-URL.
+  // imageEmoji holds a short emoji, a compressed photo data-URL, or an https image URL.
+  // Only those three shapes are accepted so a stored value can never be javascript: etc.
   const img = String(b.imageEmoji ?? "🎒");
-  const imageEmoji = img.startsWith("data:image/") ? img.slice(0, 400_000) : img.slice(0, 16);
+  const imageEmoji = img.startsWith("data:image/")
+    ? img.slice(0, 400_000)
+    : /^https?:\/\//i.test(img)
+      ? img.slice(0, 1000)
+      : img.slice(0, 16);
   const row = await prisma.lostFound.create({
     data: {
       kind: b.kind === "found" ? "found" : "lost",

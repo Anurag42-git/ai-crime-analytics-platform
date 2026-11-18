@@ -46,7 +46,7 @@ export default function CitizenPage() {
   const [post, setPost] = useState({ text: "", area: "Baner" });
   const [report, setReport] = useState({ type: "Theft", area: "Baner", description: "", anonymous: false });
   const [lf, setLf] = useState<any[]>([]);
-  const [lfForm, setLfForm] = useState({ kind: "lost", item: "", area: "Baner", description: "", image: "" });
+  const [lfForm, setLfForm] = useState({ kind: "lost", item: "", area: "Baner", description: "", image: "", imageUrl: "" });
   const [myClaims, setMyClaims] = useState<any[]>([]);
   const [incoming, setIncoming] = useState<any[]>([]);
   const [convs, setConvs] = useState<any[]>([]);
@@ -141,7 +141,7 @@ export default function CitizenPage() {
         if (fileRef.current) fileRef.current.value = "";
         return;
       }
-      setLfForm((p) => ({ ...p, image: dataUrl }));
+      setLfForm((p) => ({ ...p, image: dataUrl, imageUrl: "" }));
       setNotice("Photo attached — it stays hidden until you approve a claim.");
     } catch {
       setNotice("Could not read that image.");
@@ -150,18 +150,23 @@ export default function CitizenPage() {
 
   const submitLF = async () => {
     if (!lfForm.item.trim()) { setNotice("Item name is required."); return; }
+    const url = lfForm.imageUrl.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      setNotice("Image URL must start with http:// or https://");
+      return;
+    }
     const r = await fetch("/api/lost-found", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: lfForm.kind,
         item: lfForm.item,
         area: lfForm.area,
         description: lfForm.description,
-        imageEmoji: lfForm.image || "🎒",
+        imageEmoji: lfForm.image || url || "🎒",
       }) });
     const d = await r.json();
     if (d.ok) {
       loadAll();
-      setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "", image: "" });
+      setLfForm({ kind: "lost", item: "", area: lfForm.area, description: "", image: "", imageUrl: "" });
       if (fileRef.current) fileRef.current.value = "";
     } else setNotice(d.error ?? "Failed to post");
   };
@@ -287,18 +292,30 @@ export default function CitizenPage() {
             <input className="input" placeholder="Description" value={lfForm.description} onChange={(e) => setLfForm({ ...lfForm, description: e.target.value })} />
             <button onClick={submitLF} className="btn-primary text-sm">Post</button>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <label className="label mb-0">Photo (optional)</label>
-            <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="input max-w-xs text-xs" />
-            {lfForm.image ? (
-              <div className="flex items-center gap-2">
-                <img src={lfForm.image} alt="preview" className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/20" />
-                <button onClick={() => { setLfForm({ ...lfForm, image: "" }); if (fileRef.current) fileRef.current.value = ""; }}
-                  className="text-xs text-red-300 underline">remove</button>
-              </div>
-            ) : (
-              <span className="text-xs text-slate-500">No photo? An emoji placeholder is used.</span>
-            )}
+          <div className="mt-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="label mb-0">Photo (optional)</label>
+              <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="input max-w-xs text-xs" />
+              <span className="text-xs text-slate-500">or paste a URL</span>
+              <input className="input max-w-sm text-xs" placeholder="https://example.com/item.jpg"
+                value={lfForm.imageUrl}
+                onChange={(e) => {
+                  setLfForm({ ...lfForm, imageUrl: e.target.value, image: "" });
+                  if (fileRef.current) fileRef.current.value = "";
+                }} />
+            </div>
+            <div className="flex items-center gap-2">
+              {lfForm.image || lfForm.imageUrl ? (
+                <>
+                  <img src={lfForm.image || lfForm.imageUrl} alt="preview"
+                    className="h-12 w-12 rounded-lg object-cover ring-1 ring-white/20" />
+                  <button onClick={() => { setLfForm({ ...lfForm, image: "", imageUrl: "" }); if (fileRef.current) fileRef.current.value = ""; }}
+                    className="text-xs text-red-300 underline">remove</button>
+                </>
+              ) : (
+                <span className="text-xs text-slate-500">No photo? An emoji placeholder is used.</span>
+              )}
+            </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {lf.map((x) => {
@@ -308,7 +325,8 @@ export default function CitizenPage() {
               const approved = Boolean(convId) || x.claims?.some((c: any) => c.status === "approved" && (isMine || c.claimantId === session.id));
               // Owner always sees their own item; claimant sees it only after approval.
               const canSee = isMine || approved;
-              const isPhoto = typeof x.imageEmoji === "string" && x.imageEmoji.startsWith("data:image/");
+              const isPhoto = typeof x.imageEmoji === "string" &&
+                (x.imageEmoji.startsWith("data:image/") || /^https?:\/\//i.test(x.imageEmoji));
               return (
                 <div key={x.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="relative grid h-36 place-items-center overflow-hidden rounded-lg bg-black/40 text-4xl">
